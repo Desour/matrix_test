@@ -19,6 +19,16 @@ end
 minetest.register_craftitem("matrix_test:item", {
 	description = "matrix testitem",
 	inventory_image = "default_tool_steelaxe.png^[transformR180",
+	on_place = function(itemstack, placer, pointed_thing)
+		local pos = pointed_thing.under
+		if not pos then
+			return
+		end
+		pos.y = pos.y + 1.5
+		local ent = minetest.add_entity(pos, "matrix_test:ent2")
+		pos.y = pos.y - 1.5
+		ent:get_luaentity().nodepos = pos
+	end,
 	on_secondary_use = function(itemstack, user, pointed_thing)
 		minetest.chat_send_all("spawn test entity")
 		spawnent(user)
@@ -105,6 +115,50 @@ minetest.register_entity("matrix_test:ent", {
 			texture = "bubble.png",
 			glow = 14,
 		})
+	end,
+})
+
+minetest.register_entity("matrix_test:ent2", {
+	collisionbox = {-0.5, -0.5, -0.5, 0.5, 0.5, 0.5},
+	visual = "cube",
+	visual_size = {x = 1, y = 1},
+	--~ textures = {},
+	textures = {"yp.png", "yn.png", "xp.png", "xn.png", "zp.png", "zn.png"},
+	static_save = false,
+
+	on_punch = function(self, puncher, time_from_last_punch, tool_capabilities, dir)
+		minetest.chat_send_all("ent:on_punch")
+	end,
+	on_step = function(self, dtime)
+		-- rotate the object
+		local rot = self.object:get_rotation()
+		local oldm = matrix3.from_pitch_yaw_roll(rot)
+		local rotchange = matrix3.rotation_around_vector(vector.new(0,0,1), 0.01)
+		local mat = matrix3.multiply(rotchange, oldm)
+		local nrot = matrix3.to_pitch_yaw_roll(mat)
+		self.object:set_rotation(nrot)
+
+		-- rotate the node
+		if not self.nodepos then
+			return
+		end
+		local node = minetest.get_node(self.nodepos)
+		local nodedef = minetest.registered_nodes[node.name]
+		if not nodedef then
+			return
+		end
+		mat = matrix3.apply(mat, math.round)
+		if nodedef.paramtype2 == "facedir" then
+			node.param2 = minetest.matrix3_to_facedir(mat)
+		elseif nodedef.paramtype2 == "wallmounted" then
+			node.param2 = minetest.matrix3_to_wallmounted(mat)
+		else
+			return
+		end
+		if not node.param2 then
+			return
+		end
+		minetest.swap_node(self.nodepos, node)
 	end,
 })
 
